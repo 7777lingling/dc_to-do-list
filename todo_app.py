@@ -13,16 +13,18 @@ import os
 
 # 配置文件路徑
 CONFIG_FILE = "config.json"
+DISCORD_WEBHOOK_URL = "YOUR_WEBHOOK_URL_HERE"  # 預設值
 
 # 加載配置
 def load_config():
+    global DISCORD_WEBHOOK_URL
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                config = json.load(f)
+                DISCORD_WEBHOOK_URL = config.get('discord_webhook_url', DISCORD_WEBHOOK_URL)
         except Exception as e:
             print(f"加載配置文件時發生錯誤: {e}")
-    return {"discord_webhook_url": "YOUR_WEBHOOK_URL_HERE"}
 
 # 保存配置
 def save_config(config):
@@ -31,10 +33,6 @@ def save_config(config):
             json.dump(config, f, ensure_ascii=False, indent=4)
     except Exception as e:
         print(f"保存配置文件時發生錯誤: {e}")
-
-# 獲取配置
-config = load_config()
-DISCORD_WEBHOOK_URL = config.get('discord_webhook_url', "YOUR_WEBHOOK_URL_HERE")
 
 class GradientFrame(tk.Canvas):
     # 預設顏色組
@@ -438,11 +436,11 @@ class TodoItem:
 class ConfigWindow(tk.Toplevel):
     def __init__(self, parent, callback=None):
         super().__init__(parent)
-        self.title("設定")
+        self.title("Discord 設定")
         self.callback = callback
         
         # 設定視窗大小和位置
-        self.geometry("400x150")
+        self.geometry("400x250")  # 增加高度以容納說明文字
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
@@ -450,6 +448,17 @@ class ConfigWindow(tk.Toplevel):
         # 創建主框架
         main_frame = ttk.Frame(self, padding="20")
         main_frame.pack(fill='both', expand=True)
+        
+        # 添加說明文字
+        ttk.Label(
+            main_frame,
+            text="請設定 Discord Webhook URL\n\n"
+            "1. 在 Discord 中右鍵點擊頻道\n"
+            "2. 選擇「編輯頻道」→「整合」→「建立 Webhook」\n"
+            "3. 複製 Webhook URL 並貼到下方\n",
+            justify='left',
+            wraplength=350
+        ).pack(anchor='w', pady=(0, 10))
         
         # Discord Webhook URL 輸入
         ttk.Label(main_frame, text="Discord Webhook URL：").pack(anchor='w', pady=(0, 5))
@@ -484,7 +493,7 @@ class ConfigWindow(tk.Toplevel):
             return
         
         # 更新配置
-        config['discord_webhook_url'] = webhook_url
+        config = {"discord_webhook_url": webhook_url}
         DISCORD_WEBHOOK_URL = webhook_url
         save_config(config)
         
@@ -779,9 +788,18 @@ class SearchApp:
         ConfigWindow(self.root)
 
 def main():
+    # 先載入配置
+    load_config()
+    
+    # 創建主窗口
     root = tk.Tk()
     app = SearchApp(root)
+    
+    # 如果沒有配置文件或 webhook url 是預設值，自動打開設定視窗
+    if not os.path.exists(CONFIG_FILE) or DISCORD_WEBHOOK_URL == "YOUR_WEBHOOK_URL_HERE":
+        root.after(100, app.show_config)  # 使用 after 延遲調用，確保主窗口已完全初始化
+    
     root.mainloop()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main() 
