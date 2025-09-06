@@ -12,6 +12,7 @@
 - 🎨 柔和色彩主題
 - 📱 響應式設計
 - 🔔 Discord 通知功能
+- 🦆 可愛的鴨子圖示
 
 ## 安裝與使用
 
@@ -28,7 +29,7 @@
 
 ### 方法三：自行打包
 1. 安裝 PyInstaller：`pip install pyinstaller`
-2. 生成圖示：`python create_icon.py`
+2. 生成圖示：`python create_icon.py`（會自動使用專案中的 PNG 圖片）
 3. 運行打包腳本：`python build_exe.py`
 4. 在 `dist` 資料夾中找到 `待辦事項清單.exe`
 
@@ -50,7 +51,9 @@
 待辦事項清單/
 ├── 待辦事項清單.exe    # 主程式（唯一需要的檔案）
 ├── todos.json         # 待辦事項資料（自動生成）
-└── config.json       # 設定檔（自動生成）
+├── config.json       # 設定檔（自動生成）
+├── icon.png          # 原始圖示圖片（PNG 格式）
+└── icon.ico          # 應用程式圖示（ICO 格式）
 ```
 
 ## 技術特色
@@ -61,9 +64,11 @@
 - 響應式滾動設計
 - 柔和色彩主題
 - Discord Webhook 整合
+- 自訂圖示支援（PNG 轉 ICO）
 
 ## 注意事項
 
 - 程式會自動在運行目錄創建必要的設定檔
 - 每個安裝都是獨立的，資料不會互相影響
-- Discord 通知功能需要設定 Webhook URL 
+- Discord 通知功能需要設定 Webhook URL
+- 如需自訂圖示，請將 PNG 圖片命名為 `icon.png` 並放在專案根目錄 
