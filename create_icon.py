@@ -39,5 +39,39 @@ def create_icon():
     # 儲存為 ICO 檔案
     img.save('icon.ico', format='ICO', sizes=[(256, 256)])
 
+def convert_png_to_ico(png_file, output_file='icon.ico'):
+    """
+    將 PNG 圖片轉換為 ICO 格式
+    """
+    try:
+        # 開啟 PNG 圖片
+        img = Image.open(png_file)
+        
+        # 轉換為 RGBA 模式（支援透明背景）
+        if img.mode != 'RGBA':
+            img = img.convert('RGBA')
+        
+        # 調整大小為 256x256（ICO 格式的標準大小）
+        img = img.resize((256, 256), Image.Resampling.LANCZOS)
+        
+        # 儲存為 ICO 檔案，包含多種尺寸
+        img.save(output_file, format='ICO', sizes=[(256, 256), (128, 128), (64, 64), (32, 32), (16, 16)])
+        
+        print(f"成功將 {png_file} 轉換為 {output_file}")
+        return True
+        
+    except Exception as e:
+        print(f"轉換失敗：{e}")
+        return False
+
 if __name__ == "__main__":
-    create_icon() 
+    # 檢查是否有 PNG 檔案
+    png_files = [f for f in os.listdir('.') if f.lower().endswith('.png')]
+    
+    if png_files:
+        print(f"找到 PNG 檔案：{png_files}")
+        # 使用第一個找到的 PNG 檔案
+        convert_png_to_ico(png_files[0])
+    else:
+        print("未找到 PNG 檔案，使用預設圖示")
+        create_icon() 
