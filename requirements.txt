@@ -1,5 +1,8 @@
-tkinter
 pillow
 plyer
 tkcalendar
 requests 
+pillow
+plyer
+tkcalendar
+requests
