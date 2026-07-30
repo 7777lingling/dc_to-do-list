@@ -102,6 +102,8 @@ python build_exe.py
 
 打包完成後，執行檔會輸出到 `dist/` 目錄。
 
+注意：打包後的單一 exe 檔案會將程式資源封裝或解到臨時位置，通常無法直接把可變資料寫回到 exe 檔內。因此程式會把使用者設定與資料（例如 `config.json`、`todos.json`）儲存在使用者可寫的資料目錄。Windows 平台預設路徑為 `%APPDATA%/Schedule`，以確保資料能在更新或覆蓋執行檔時保留。
+
 ### 4. Android 版
 
 專案另外提供 `android_app.py` 作為 Android 版入口，並用 `main.py` 作為 Buildozer 預設啟動檔。Android 版使用 Kivy 製作手機介面，保留待辦事項的主要 JSON 欄位與完成狀態同步規則。

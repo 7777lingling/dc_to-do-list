@@ -1,15 +1,42 @@
 import json
 import os
+import sys
 
 CONFIG_FILE = "config.json"
 CONFIG_EXAMPLE_FILE = "config.example.json"
 TODOS_FILE = "todos.json"
 
+# Directory where the package lives (read-only in bundled exe)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+def get_data_dir() -> str:
+    """Return a directory for writable app data.
+
+    - When running as a PyInstaller frozen exe, prefer a per-user AppData folder on Windows
+      (or the user's home directory on other platforms).
+    - When running from source, keep using the package directory so behavior is unchanged.
+    """
+    if getattr(sys, "frozen", False):
+        # Running as bundled exe — use APPDATA on Windows, XDG or home on others
+        if os.name == "nt":
+            base = os.environ.get("APPDATA") or os.path.expanduser("~")
+        else:
+            base = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+        data_dir = os.path.join(base, "Schedule")
+    else:
+        data_dir = BASE_DIR
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir
+
+
 def resolve_path(filename: str) -> str:
-    return os.path.join(BASE_DIR, filename)
+    """Resolve a filename to a writable path for runtime data files.
+
+    Example: when frozen this will point to "%APPDATA%/Schedule/config.json" so the
+    executable can persist changes across runs.
+    """
+    return os.path.join(get_data_dir(), filename)
 
 
 def load_config(config_path: str | None = None, default_webhook: str = "YOUR_WEBHOOK_URL_HERE") -> dict:
