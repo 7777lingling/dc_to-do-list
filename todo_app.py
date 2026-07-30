@@ -171,16 +171,30 @@ class NotificationWindow(tk.Toplevel):
         self.callback = callback
         
         # 設定視窗大小和位置
-        self.geometry("480x640")  # 增加一點高度來容納新的輸入欄位
-        self.resizable(False, False)
+        self.geometry("520x700")  # 內容區可捲動，底部操作列固定顯示
+        self.minsize(480, 620)
+        self.resizable(True, True)
         self.transient(parent)
         self.grab_set()
         self.configure(bg=UI_COLORS["background"])
         
         # 創建主框架
-        main_frame = ttk.Frame(self, padding=PAD_WINDOW)
-        main_frame.pack(fill='both', expand=True)
+        outer_frame = ttk.Frame(self, padding=PAD_WINDOW)
+        outer_frame.pack(fill='both', expand=True)
+        outer_frame.columnconfigure(0, weight=1)
+        outer_frame.rowconfigure(0, weight=1)
+
+        content_canvas = tk.Canvas(outer_frame, bg=UI_COLORS["background"], highlightthickness=0, bd=0)
+        content_canvas.grid(row=0, column=0, sticky='nsew')
+        content_scrollbar = ttk.Scrollbar(outer_frame, orient='vertical', command=content_canvas.yview)
+        content_scrollbar.grid(row=0, column=1, sticky='ns', padx=(8, 0))
+        content_canvas.configure(yscrollcommand=content_scrollbar.set)
+
+        main_frame = ttk.Frame(content_canvas)
+        content_window = content_canvas.create_window((0, 0), window=main_frame, anchor='nw')
         main_frame.columnconfigure(0, weight=1)
+        main_frame.bind('<Configure>', lambda e: content_canvas.configure(scrollregion=content_canvas.bbox('all')))
+        content_canvas.bind('<Configure>', lambda e: content_canvas.itemconfigure(content_window, width=e.width))
 
         ttk.Label(main_frame, text="通知設定", style="Title.TLabel").pack(anchor='w', pady=(0, 4))
         ttk.Label(main_frame, text="設定提醒時間與通知內容。", style="Subtitle.TLabel").pack(anchor='w', pady=(0, PAD_SECTION))
@@ -247,7 +261,7 @@ class NotificationWindow(tk.Toplevel):
         self.content_text.pack(fill='x', pady=(0, 15))
         
         # 添加圖片 URL 輸入
-        ttk.Label(main_frame, text="圖片 URL（可選）").pack(anchor='w', pady=(0, 5))
+        ttk.Label(main_frame, text="圖片 URL（可選，僅 Discord 通知支援）").pack(anchor='w', pady=(0, 5))
         self.image_url_entry = ttk.Entry(main_frame)
         self.image_url_entry.pack(fill='x', pady=(0, 15))
 
@@ -280,8 +294,8 @@ class NotificationWindow(tk.Toplevel):
             btn.pack(side='left', padx=5)
         
         # 創建按鈕區域
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill='x', pady=(15, 0))
+        button_frame = ttk.Frame(outer_frame)
+        button_frame.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(PAD_SECTION, 0))
         
         ttk.Button(
             button_frame,
@@ -385,8 +399,9 @@ class NotificationWindow(tk.Toplevel):
     
     def center_window(self):
         self.update_idletasks()
-        width = self.winfo_width()
-        height = self.winfo_height()
+        width = max(self.winfo_width(), self.winfo_reqwidth(), 520)
+        height = max(self.winfo_height(), self.winfo_reqheight(), 700)
+        height = min(height, max(self.winfo_screenheight() - 80, 620))
         x = (self.winfo_screenwidth() // 2) - (width // 2)
         y = (self.winfo_screenheight() // 2) - (height // 2)
         self.geometry(f'{width}x{height}+{x}+{y}')
@@ -536,6 +551,7 @@ class TodoItem:
         canvas.tag_bind(self.delete_btn_id, '<Button-1>', self.on_delete)
         canvas.tag_bind(self.text_id, '<Double-Button-1>', self.on_edit)
         canvas.tag_bind(self.title_id, '<Double-Button-1>', self.on_edit)
+        canvas.tag_bind(self.card_tag, '<Double-Button-1>', self.on_edit)
         canvas.tag_bind(self.card_tag, '<Enter>', self.on_hover)
         canvas.tag_bind(self.card_tag, '<Leave>', self.on_leave)
 
@@ -1141,8 +1157,9 @@ class SearchApp:
         self.list_header.grid(row=0, column=0, sticky='ew', padx=18, pady=(16, 8))
         self.list_header.columnconfigure(0, weight=1)
         ttk.Label(self.list_header, text="任務列表", style="SurfaceSubtitle.TLabel").grid(row=0, column=0, sticky='w')
+        ttk.Label(self.list_header, text="雙擊卡片可編輯，勾選會同步為已完成", style="SurfaceMuted.TLabel").grid(row=1, column=0, sticky='w', pady=(2, 0))
         self.task_count_label = ttk.Label(self.list_header, text="", style="SurfaceMuted.TLabel")
-        self.task_count_label.grid(row=0, column=1, sticky='e')
+        self.task_count_label.grid(row=0, column=1, rowspan=2, sticky='e')
 
         self.task_canvas = tk.Canvas(self.list_frame, bg=UI_COLORS["background_soft"], highlightthickness=0, bd=0)
         self.task_canvas.grid(row=1, column=0, sticky='nsew', padx=(18, 8), pady=(0, 18))
@@ -1221,6 +1238,11 @@ class SearchApp:
     def load_todos(self):
         """載入待辦事項"""
         self.todos = load_storage_todos()
+        changed = False
+        for todo in self.todos:
+            changed = self.sync_todo_completion_state(todo) or changed
+        if changed:
+            self.save_todos()
         print("成功載入待辦事項：", self.todos)
     
     def save_todos(self):
@@ -1234,6 +1256,23 @@ class SearchApp:
     def check_notifications(self):
         """檢查並發送通知"""
         return None
+
+    def sync_todo_completion_state(self, todo):
+        """同步任務進度與勾選狀態。"""
+        changed = False
+        if todo.get('status') == '已完成' and not todo.get('completed'):
+            todo['completed'] = True
+            changed = True
+        if todo.get('completed') and todo.get('status') != '已完成':
+            todo['status'] = '已完成'
+            changed = True
+        if todo.get('completed') and not todo.get('completion_time'):
+            todo['completion_time'] = datetime.now().isoformat()
+            changed = True
+        if not todo.get('completed') and todo.get('status') != '已完成' and todo.get('completion_time'):
+            todo.pop('completion_time', None)
+            changed = True
+        return changed
     
     def update_notification(self, todo_id, notification_time):
         """更新待辦事項的通知時間"""
@@ -1273,8 +1312,7 @@ class SearchApp:
         todo_data['id'] = str(uuid.uuid4())
         todo_data['text'] = todo_data.get('title', '無標題')
         todo_data['completed'] = todo_data.get('status') == '已完成'
-        if todo_data['completed'] and not todo_data.get('completion_time'):
-            todo_data['completion_time'] = datetime.now().isoformat()
+        self.sync_todo_completion_state(todo_data)
         if 'completion_history' not in todo_data:
             todo_data['completion_history'] = []
         self.todos.append(todo_data)
@@ -1292,10 +1330,7 @@ class SearchApp:
                 todo.update(todo_data)
                 todo['text'] = todo_data.get('title', todo.get('text', '無標題'))
                 todo['completed'] = todo_data.get('status') == '已完成'
-                if todo['completed'] and not todo.get('completion_time'):
-                    todo['completion_time'] = datetime.now().isoformat()
-                if not todo['completed']:
-                    todo.pop('completion_time', None)
+                self.sync_todo_completion_state(todo)
                 break
         self.save_todos()
         self.render_todos()
@@ -1386,12 +1421,22 @@ class SearchApp:
         for todo in self.todos:
             if todo['id'] == todo_id:
                 todo['completed'] = not todo['completed']
+                if todo['completed']:
+                    todo['status'] = '已完成'
+                else:
+                    if todo.get('status') == '已完成':
+                        todo['status'] = '未開始'
+                self.sync_todo_completion_state(todo)
                 break
         self.save_todos()
         self.render_todos()
     
     def show_config(self):
-        ConfigWindow(self.root)
+        ConfigWindow(self.root, callback=self.refresh_notification_config)
+
+    def refresh_notification_config(self):
+        if hasattr(self, 'notification_service'):
+            self.notification_service.webhook_url = DISCORD_WEBHOOK_URL
 
 def main():
     # 先載入配置

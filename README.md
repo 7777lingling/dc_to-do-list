@@ -14,6 +14,7 @@
 - 匯出格式：JSON、Markdown
 - 打包方式：PyInstaller
 - 介面風格：低飽和冷色系、卡片式任務列表、集中式 `ttk.Style`
+- Android 版本：提供 Kivy 入口程式與 Buildozer 打包設定
 
 ## 主要功能
 
@@ -101,11 +102,32 @@ python build_exe.py
 
 打包完成後，執行檔會輸出到 `dist/` 目錄。
 
+### 4. Android 版
+
+專案另外提供 `android_app.py` 作為 Android 版入口，並用 `main.py` 作為 Buildozer 預設啟動檔。Android 版使用 Kivy 製作手機介面，保留待辦事項的主要 JSON 欄位與完成狀態同步規則。
+
+本機測試 Android 版介面：
+
+```bash
+pip install -r requirements_android.txt
+python android_app.py
+```
+
+打包 APK 建議在 WSL 或 Linux 環境使用 Buildozer：
+
+```bash
+pip install buildozer
+buildozer android debug
+```
+
+產出的 APK 會在 `bin/` 目錄。首次打包會下載 Android SDK、NDK、Gradle 與 Python-for-Android，時間會比較久。
+
 ## 專案結構
 
 ```text
 schedule/
 ├── todo_app.py                  # 主程式與 tkinter GUI
+├── android_app.py               # Android / Kivy 版入口程式
 ├── storage.py                   # config.json / todos.json 讀寫邏輯
 ├── notify.py                    # Discord 與系統通知服務
 ├── export.py                    # JSON / Markdown 匯出服務
@@ -113,6 +135,9 @@ schedule/
 ├── build_exe.py                 # PyInstaller 打包腳本
 ├── run.bat                      # Windows 啟動批次檔
 ├── requirements.txt             # Python 套件依賴
+├── requirements_android.txt     # Android / Kivy 版依賴
+├── buildozer.spec               # Android APK 打包設定
+├── ANDROID_BUILD.md             # Android 打包流程紀錄
 ├── config.example.json          # Discord Webhook 設定範例
 ├── todos.json                   # 待辦事項資料檔
 ├── tests/
@@ -159,6 +184,8 @@ python -m unittest discover -s tests
 此專案採用單機檔案型架構，主程式 `todo_app.py` 負責 GUI、視窗流程與使用者互動；`storage.py`、`notify.py`、`export.py` 則拆出儲存、通知與匯出邏輯，讓核心功能比單一檔案更容易測試與維護。
 
 UI 層目前主要集中在 `SearchApp`、`TodoItem`、`TaskEditorWindow`、`ExportWindow` 與 `ConfigWindow`。主畫面的資料讀寫、通知發送、匯出流程仍維持既有服務與 callback，介面重排不改變任務資料格式或 JSON 儲存方式。
+
+Android 版 UI 集中在 `android_app.py`。它是獨立入口，不會取代 Windows 桌面版；手機端會使用 Android App 私有資料目錄保存 `todos.json`，不會自動與 Windows 桌面版同步。
 
 目前資料以 JSON 檔直接保存，優點是部署簡單、不需資料庫；限制是多人同步、資料衝突與大量資料查詢能力較弱。若未來要擴充成長期使用工具，可考慮加入資料備份、匯入功能、欄位驗證、通知失敗重試，以及更完整的單元測試。
 

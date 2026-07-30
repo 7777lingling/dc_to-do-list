@@ -7,6 +7,15 @@ import requests
 from plyer import notification
 
 
+def _clean_image_url(url: str | None) -> str:
+    if not url:
+        return ""
+    cleaned = str(url).strip().strip("<>")
+    if cleaned.startswith("http://") or cleaned.startswith("https://"):
+        return cleaned
+    return ""
+
+
 class NotificationService:
     def __init__(self, app, webhook_url: str):
         self.app = app
@@ -53,8 +62,14 @@ class NotificationService:
 
         if notification_type == 'discord' and self.webhook_url:
             payload = {"content": message}
-            if notification_data.get('image_url'):
-                payload['embeds'] = [{"image": {"url": notification_data['image_url']}}]
+            image_url = _clean_image_url(notification_data.get('image_url'))
+            if image_url:
+                payload['embeds'] = [{
+                    "color": 0x4F46E5,
+                    "image": {"url": image_url}
+                }]
+            elif notification_data.get('image_url'):
+                print(f"忽略無效圖片 URL: {notification_data.get('image_url')}")
             try:
                 response = requests.post(self.webhook_url, json=payload, timeout=10)
                 if response.status_code >= 400:
