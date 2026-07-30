@@ -1,74 +1,177 @@
-# 待辦事項清單應用程式
+# 待辦事項清單桌面應用程式
 
-一個美觀、簡約、柔和的待辦事項管理應用程式。
+這是一個使用 Python `tkinter` 開發的桌面待辦事項管理工具。專案提供任務新增、編輯、完成狀態管理、提醒通知、Discord Webhook 通知，以及 JSON / Markdown 匯出功能，適合用來管理個人工作、學習與生活任務。
 
-## 功能特色
+目前介面已重新整理為偏 Windows 11 Fluent Design 的低飽和生產力工具風格，重點是清楚的資訊層級、舒適留白、卡片式任務列表與一致的表單元件。
 
-- ✨ 美觀的用戶界面設計
-- 📝 新增、編輯、刪除待辦事項
-- ✅ 勾選完成/未完成狀態
-- 📊 即時統計資訊
-- 💾 自動儲存功能
-- 🎨 柔和色彩主題
-- 📱 響應式設計
-- 🔔 Discord 通知功能
-- 🦆 可愛的鴨子圖示
+## 專案概覽
 
-## 安裝與使用
+- 應用型態：Windows 桌面 GUI 應用程式
+- 主要語言：Python
+- 主要介面框架：tkinter、ttk、tkcalendar
+- 資料儲存：本機 JSON 檔案
+- 通知方式：Discord Webhook 或系統通知
+- 匯出格式：JSON、Markdown
+- 打包方式：PyInstaller
+- 介面風格：低飽和冷色系、卡片式任務列表、集中式 `ttk.Style`
 
-### 方法一：直接下載使用（推薦）
-1. 下載 `待辦事項清單.exe`
-2. 直接點擊執行即可使用
-3. 首次運行時會自動設定必要的檔案
-4. 依照提示設定 Discord webhook（可選）
+## 主要功能
 
-### 方法二：從原始碼運行
-1. 確保已安裝 Python 3.7+
-2. 安裝依賴：`pip install -r requirements.txt`
-3. 運行應用程式：`python todo_app.py`
+- 任務管理：新增、編輯、刪除待辦事項。
+- 任務欄位：支援標題、內容、分類、優先級、進度、開始日期。
+- 完成管理：可切換完成狀態，並保留完成心得或紀錄。
+- 提醒設定：可為單一任務設定提醒時間、提醒內容模板、設定人與圖片 URL。
+- 通知整合：支援 Discord Webhook 與本機系統通知。
+- 匯出工具：可依任務、分類、狀態、優先級、日期與手動勾選範圍匯出。
+- 匯出預覽：匯出前可即時預覽 JSON 或 Markdown 內容。
+- 設定管理：Webhook 設定儲存在 `config.json`，並提供 `config.example.json` 範例。
+- 圖示與打包：包含圖示產生與 PyInstaller 打包腳本。
 
-### 方法三：自行打包
-1. 安裝 PyInstaller：`pip install pyinstaller`
-2. 生成圖示：`python create_icon.py`（會自動使用專案中的 PNG 圖片）
-3. 運行打包腳本：`python build_exe.py`
-4. 在 `dist` 資料夾中找到 `待辦事項清單.exe`
+## 介面設計
 
-## 使用說明
+新版 UI 將主畫面拆成三個主要區塊：
 
-1. **新增待辦事項**：在輸入框中輸入內容，按 Enter 或點擊「新增」按鈕
-2. **標記完成**：點擊項目前的勾選框
-3. **刪除項目**：點擊項目右側的 × 按鈕
-4. **設定提醒**：點擊項目右側的鈴鐺圖示
-5. **編輯項目**：雙擊項目文字
-6. **Discord 通知**：
-   - 在 Discord 中建立 Webhook（[教學](https://support.discord.com/hc/zh-tw/articles/228383668-%E4%BD%BF%E7%94%A8%E7%B6%B2%E7%B5%A1%E9%89%A4%E6%89%8B-Webhooks-)）
-   - 在應用程式中設定 Webhook URL
-   - 為待辦事項設定提醒時間
+```text
+Header
+  顯示 Schedule 標題、今天日期、完成率、今日任務數
 
-## 檔案說明
+搜尋與操作列
+  左側為搜尋 / 快速輸入欄位，右側為「新增」與「匯出」按鈕
 
-```
-待辦事項清單/
-├── 待辦事項清單.exe    # 主程式（唯一需要的檔案）
-├── todos.json         # 待辦事項資料（自動生成）
-├── config.json       # 設定檔（自動生成）
-├── icon.png          # 原始圖示圖片（PNG 格式）
-└── icon.ico          # 應用程式圖示（ICO 格式）
+任務列表
+  每筆任務以白色卡片呈現，包含完成狀態、標題、分類、進度、優先級、開始日期、提醒與刪除操作
 ```
 
-## 技術特色
+視覺設計使用低飽和冷色系：
 
-- 使用 tkinter 建立原生桌面應用程式
-- JSON 格式儲存資料
-- 多執行緒自動儲存
-- 響應式滾動設計
-- 柔和色彩主題
-- Discord Webhook 整合
-- 自訂圖示支援（PNG 轉 ICO）
+- 背景：`#F8FAFC`
+- 主背景：`#EEF4FF`
+- 卡片：`#FFFFFF`
+- 主要色：`#4F46E5`
+- Hover：`#6366F1`
+- 成功：`#22C55E`
+- 警告：`#F59E0B`
+- 危險：`#EF4444`
+- 主要文字：`#1F2937`
+- 次要文字：`#6B7280`
+- Border：`#E5E7EB`
+- Divider：`#F1F5F9`
+
+介面樣式集中在 `todo_app.py` 的 `setup_style()`，並搭配 `UI_COLORS`、字體常數與間距常數管理，避免樣式分散在各個元件中。
+
+## 安裝與執行
+
+### 1. 使用原始碼執行
+
+請先確認已安裝 Python 3.10 或以上版本。
+
+```bash
+pip install -r requirements.txt
+python todo_app.py
+```
+
+也可以在 Windows 直接執行：
+
+```bat
+run.bat
+```
+
+### 2. 設定 Discord Webhook
+
+第一次執行時，若尚未建立 `config.json` 或 Webhook 尚未設定，應用程式會開啟設定視窗。
+
+設定檔格式如下：
+
+```json
+{
+  "discord_webhook_url": "https://discord.com/api/webhooks/your-webhook-id/your-webhook-token"
+}
+```
+
+如果不需要 Discord 通知，可以保留預設值，並在任務提醒中選擇系統通知。
+
+### 3. 打包成執行檔
+
+安裝 PyInstaller 後執行：
+
+```bash
+pip install pyinstaller
+python build_exe.py
+```
+
+打包完成後，執行檔會輸出到 `dist/` 目錄。
+
+## 專案結構
+
+```text
+schedule/
+├── todo_app.py                  # 主程式與 tkinter GUI
+├── storage.py                   # config.json / todos.json 讀寫邏輯
+├── notify.py                    # Discord 與系統通知服務
+├── export.py                    # JSON / Markdown 匯出服務
+├── create_icon.py               # 產生應用程式圖示
+├── build_exe.py                 # PyInstaller 打包腳本
+├── run.bat                      # Windows 啟動批次檔
+├── requirements.txt             # Python 套件依賴
+├── config.example.json          # Discord Webhook 設定範例
+├── todos.json                   # 待辦事項資料檔
+├── tests/
+│   └── test_export_and_completion.py
+├── output/                      # Markdown 匯出輸出目錄
+├── icon.png
+├── icon.ico
+└── 待辦事項清單.spec
+```
+
+## 資料格式
+
+待辦事項儲存在 `todos.json`，每筆任務大致包含下列欄位：
+
+```json
+{
+  "id": "uuid",
+  "title": "任務標題",
+  "content": "任務內容",
+  "start_date": "2026-07-30",
+  "category": "學習",
+  "priority": "中",
+  "status": "進行中",
+  "completed": false,
+  "notification": null,
+  "completion_history": []
+}
+```
+
+提醒設定會以 JSON 字串儲存在任務的 `notification` 欄位中，包含提醒時間、通知模板、通知方式、設定人與圖片 URL。
+
+## 測試
+
+目前測試集中在匯出功能與欄位選擇行為：
+
+```bash
+python -m unittest discover -s tests
+```
+
+測試檔案位於 `tests/test_export_and_completion.py`。
+
+## 技術分析
+
+此專案採用單機檔案型架構，主程式 `todo_app.py` 負責 GUI、視窗流程與使用者互動；`storage.py`、`notify.py`、`export.py` 則拆出儲存、通知與匯出邏輯，讓核心功能比單一檔案更容易測試與維護。
+
+UI 層目前主要集中在 `SearchApp`、`TodoItem`、`TaskEditorWindow`、`ExportWindow` 與 `ConfigWindow`。主畫面的資料讀寫、通知發送、匯出流程仍維持既有服務與 callback，介面重排不改變任務資料格式或 JSON 儲存方式。
+
+目前資料以 JSON 檔直接保存，優點是部署簡單、不需資料庫；限制是多人同步、資料衝突與大量資料查詢能力較弱。若未來要擴充成長期使用工具，可考慮加入資料備份、匯入功能、欄位驗證、通知失敗重試，以及更完整的單元測試。
+
+## UI 維護原則
+
+- 新增或調整顏色時，優先修改 `UI_COLORS`。
+- 新增 ttk 元件樣式時，優先放在 `setup_style()`。
+- 盡量保留任務資料結構、method name、callback 與 event binding。
+- UI 調整應集中在視窗與元件排版，不直接改動 `storage.py`、`notify.py`、`export.py` 的商業邏輯。
 
 ## 注意事項
 
-- 程式會自動在運行目錄創建必要的設定檔
-- 每個安裝都是獨立的，資料不會互相影響
-- Discord 通知功能需要設定 Webhook URL
-- 如需自訂圖示，請將 PNG 圖片命名為 `icon.png` 並放在專案根目錄 
+- `config.json` 可能包含 Discord Webhook，建議不要提交到公開版本庫。
+- `todos.json` 是本機任務資料，若要保留任務紀錄請定期備份。
+- 執行通知功能時，應用程式需要保持開啟。
+- 若匯出 Markdown 或 JSON，請確認選擇的輸出路徑有寫入權限。
