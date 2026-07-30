@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
+from tkinter import filedialog
 import json
 from datetime import datetime, time as dt_time
 import uuid
@@ -14,6 +15,9 @@ import os
 # 配置文件路徑
 CONFIG_FILE = "config.json"
 DISCORD_WEBHOOK_URL = "YOUR_WEBHOOK_URL_HERE"  # 預設值
+CATEGORIES = ["學習", "工作", "生活", "其他"]
+PRIORITY_LEVELS = ["低", "中", "高"]
+STATUS_OPTIONS = ["未開始", "進行中", "已完成"]
 
 # 加載配置
 def load_config():
@@ -82,14 +86,15 @@ class GradientFrame(tk.Canvas):
         self.lower("gradient")
 
 class NotificationWindow(tk.Toplevel):
-    def __init__(self, parent, todo_id, current_notification=None, app=None):
+    def __init__(self, parent, todo_id, current_notification=None, app=None, callback=None):
         super().__init__(parent)
         self.title("設定通知")
         self.todo_id = todo_id
         self.app = app
+        self.callback = callback
         
         # 設定視窗大小和位置
-        self.geometry("400x550")  # 增加一點高度來容納新的輸入欄位
+        self.geometry("400x580")  # 增加一點高度來容納新的輸入欄位
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
@@ -155,6 +160,14 @@ class NotificationWindow(tk.Toplevel):
         ttk.Label(main_frame, text="圖片 URL（可選）：").pack(anchor='w', pady=(0, 5))
         self.image_url_entry = ttk.Entry(main_frame)
         self.image_url_entry.pack(fill='x', pady=(0, 15))
+
+        # 通知類型選擇
+        ttk.Label(main_frame, text="通知方式：").pack(anchor='w', pady=(0, 5))
+        self.notify_type = tk.StringVar(value='discord')
+        notify_frame = ttk.Frame(main_frame)
+        notify_frame.pack(fill='x', pady=(0, 15))
+        ttk.Radiobutton(notify_frame, text='Discord', variable=self.notify_type, value='discord').pack(side='left', padx=(0, 10))
+        ttk.Radiobutton(notify_frame, text='系統通知', variable=self.notify_type, value='system').pack(side='left')
         
         # 創建變數選擇區
         ttk.Label(main_frame, text="可用變數：").pack(anchor='w', pady=(0, 5))
@@ -233,6 +246,8 @@ class NotificationWindow(tk.Toplevel):
             if 'creator' in notification_data:
                 self.creator_entry.delete(0, 'end')
                 self.creator_entry.insert(0, notification_data['creator'])
+            if 'type' in notification_data:
+                self.notify_type.set(notification_data['type'])
         except Exception as e:
             print(f"載入通知設定時發生錯誤: {e}")
     
@@ -259,16 +274,18 @@ class NotificationWindow(tk.Toplevel):
             notification_data = {
                 'time': notification_time.isoformat(),
                 'template': content_template,
-                'type': 'discord',  # 添加通知類型
-                'creator': creator  # 添加設定人
+                'type': self.notify_type.get(),
+                'creator': creator
             }
             
             # 如果有設定圖片 URL，則添加到通知數據中
             if image_url:
                 notification_data['image_url'] = image_url
             
-            # 更新待辦事項的通知設定
-            self.app.update_notification(self.todo_id, json.dumps(notification_data))
+            if self.callback:
+                self.callback(self.todo_id, json.dumps(notification_data))
+            else:
+                self.app.update_notification(self.todo_id, json.dumps(notification_data))
             self.destroy()
         except Exception as e:
             messagebox.showerror("錯誤", f"保存通知設定時發生錯誤：{e}")
@@ -289,134 +306,67 @@ class TodoItem:
         self.delete_callback = delete_callback
         self.toggle_callback = toggle_callback
         self.notification_callback = notification_callback
-        self.edit_callback = edit_callback  # 添加編輯回調
+        self.edit_callback = edit_callback
         
-        # 創建複選框狀態
         self.completed = todo['completed']
         
-        # 在Canvas上創建複選框
+        canvas_width = canvas.winfo_reqwidth()
+        if canvas_width <= 1:
+            canvas_width = 500
+        
+        item_width = int(canvas_width * 0.74)
+        detail_text = todo.get('content', '') or '未填寫說明'
+        start_text = todo.get('start_date') or '未設定'
+        status_text = todo.get('status', '未開始')
+        meta = f"{todo.get('category', '其他')} | {todo.get('priority', '中')} | {status_text} | 開始 {start_text}"
+        display_text = f"{todo.get('title', '無標題')}\n{meta}\n{detail_text}"
+        
         self.checkbox_text = '☑' if self.completed else '☐'
         self.checkbox_id = canvas.create_text(
-            50,  # x座標
-            y,   # y座標
+            int(canvas_width * 0.05),
+            y,
             text=self.checkbox_text,
             font=('Microsoft YaHei UI', 16),
-            fill='#00c6fb',  # 使用主題2的顏色
-            anchor='w'
+            fill='#00c6fb',
+            anchor='nw'
         )
         
-        # 在Canvas上創建文字
         self.text_id = canvas.create_text(
-            90,  # x座標
-            y,   # y座標
-            text=todo['text'],
-            font=('Microsoft YaHei UI', 12),
-            fill='#00c6fb',  # 使用主題2的顏色
-            anchor='w'
+            int(canvas_width * 0.12),
+            y,
+            text=display_text,
+            font=('Microsoft YaHei UI', 11),
+            fill='#ffffff',
+            anchor='nw',
+            width=item_width
         )
         
-        # 在Canvas上創建通知圖標
         notification_icon = '🔔' if todo.get('notification') else '🔕'
         self.notification_id = canvas.create_text(
-            canvas.winfo_reqwidth() - 60,  # x座標
-            y,   # y座標
+            int(canvas_width * 0.78),
+            y + 10,
             text=notification_icon,
-            font=('Microsoft YaHei UI', 12),
-            fill='#7289DA',  # Discord 品牌色
-            anchor='e'
+            font=('Microsoft YaHei UI', 14),
+            fill='#7289DA',
+            anchor='w'
         )
         
-        # 在Canvas上創建刪除按鈕文字
         self.delete_btn_id = canvas.create_text(
-            canvas.winfo_reqwidth() - 30,  # x座標
-            y,   # y座標
+            int(canvas_width * 0.92),
+            y + 10,
             text='❌',
-            font=('Microsoft YaHei UI', 10),
-            fill='#ff8177',  # 使用主題1的顏色
-            anchor='e'
+            font=('Microsoft YaHei UI', 12),
+            fill='#ff8177',
+            anchor='w'
         )
         
-        # 綁定點擊事件
         canvas.tag_bind(self.checkbox_id, '<Button-1>', self.on_toggle)
         canvas.tag_bind(self.notification_id, '<Button-1>', self.on_notification)
         canvas.tag_bind(self.delete_btn_id, '<Button-1>', self.on_delete)
         canvas.tag_bind(self.text_id, '<Double-Button-1>', self.on_edit)
-        
-        # 編輯模式變數
-        self.edit_window = None
     
     def on_edit(self, event):
-        # 如果已經在編輯中，不要重複開啟編輯窗口
-        if self.edit_window is not None:
-            return
-            
-        # 創建編輯窗口
-        self.edit_window = tk.Toplevel(self.canvas)
-        self.edit_window.title("編輯待辦事項")
-        self.edit_window.geometry("300x150")
-        self.edit_window.resizable(False, False)
-        
-        # 設置窗口樣式
-        self.edit_window.configure(bg='#2C2F33')  # Discord 深色主題
-        
-        # 創建框架
-        frame = ttk.Frame(self.edit_window, padding="20")
-        frame.pack(fill='both', expand=True)
-        
-        # 創建輸入框
-        ttk.Label(frame, text="待辦事項內容：").pack(anchor='w', pady=(0, 5))
-        entry = ttk.Entry(frame, font=('Microsoft YaHei UI', 12))
-        entry.pack(fill='x', pady=(0, 20))
-        entry.insert(0, self.todo['text'])
-        entry.select_range(0, 'end')
-        entry.focus()
-        
-        # 創建按鈕
-        btn_frame = ttk.Frame(frame)
-        btn_frame.pack(fill='x')
-        
-        ttk.Button(
-            btn_frame,
-            text="取消",
-            command=self.edit_window.destroy
-        ).pack(side='right', padx=(5, 0))
-        
-        ttk.Button(
-            btn_frame,
-            text="確定",
-            command=lambda: self.save_edit(entry.get())
-        ).pack(side='right')
-        
-        # 綁定回車鍵
-        entry.bind('<Return>', lambda e: self.save_edit(entry.get()))
-        
-        # 綁定窗口關閉事件
-        self.edit_window.protocol("WM_DELETE_WINDOW", self.edit_window.destroy)
-        
-        # 使窗口居中
-        self.center_edit_window()
-    
-    def save_edit(self, new_text):
-        if new_text.strip():  # 確保不是空白文字
-            old_text = self.todo['text']
-            new_text = new_text.strip()
-            print(f"正在保存更改：'{old_text}' -> '{new_text}'")  # 添加調試信息
-            
-            # 使用編輯回調保存更改
-            self.edit_callback(self.todo['id'], new_text)
-            print("保存完成")  # 添加調試信息
-        
-        if self.edit_window:
-            self.edit_window.destroy()
-            self.edit_window = None
-    
-    def center_edit_window(self):
-        self.edit_window.update_idletasks()
-        width = self.edit_window.winfo_width()
-        height = self.edit_window.winfo_height()
-        x = (self.edit_window.winfo_screenwidth() // 2) - (width // 2)
-        y = (self.edit_window.winfo_screenheight() // 2) - (height // 2)
-        self.edit_window.geometry(f'{width}x{height}+{x}+{y}')
+        self.edit_callback(self.todo['id'])
     
     def on_delete(self, event):
         self.delete_callback(self.todo['id'])
@@ -433,22 +383,359 @@ class TodoItem:
         self.canvas.delete(self.checkbox_id)
         self.canvas.delete(self.notification_id)
 
+class TaskEditorWindow(tk.Toplevel):
+    def __init__(self, parent, app, todo=None, callback=None):
+        super().__init__(parent)
+        self.title("編輯任務" if todo else "新增任務")
+        self.geometry("450x700")
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+        self.app = app
+        self.todo = todo
+        self.callback = callback
+
+        main_frame = ttk.Frame(self, padding="16")
+        main_frame.pack(fill='both', expand=True)
+
+        ttk.Label(main_frame, text="標題：").pack(anchor='w', pady=(0, 5))
+        self.title_entry = ttk.Entry(main_frame, font=('Microsoft YaHei UI', 13))
+        self.title_entry.pack(fill='x', pady=(0, 12))
+
+        ttk.Label(main_frame, text="內容：").pack(anchor='w', pady=(0, 5))
+        self.content_text = tk.Text(main_frame, height=6, wrap='word', font=('Microsoft YaHei UI', 11))
+        self.content_text.pack(fill='both', pady=(0, 12))
+
+        meta_frame = ttk.Frame(main_frame)
+        meta_frame.pack(fill='x', pady=(0, 12))
+
+        left_meta = ttk.Frame(meta_frame)
+        left_meta.pack(side='left', fill='x', expand=True)
+        right_meta = ttk.Frame(meta_frame)
+        right_meta.pack(side='left', fill='x', expand=True, padx=(10, 0))
+
+        ttk.Label(left_meta, text="分類：").pack(anchor='w', pady=(0, 5))
+        self.category_box = ttk.Combobox(left_meta, values=CATEGORIES, state='readonly')
+        self.category_box.pack(fill='x')
+
+        ttk.Label(left_meta, text="優先級：").pack(anchor='w', pady=(10, 5))
+        self.priority_box = ttk.Combobox(left_meta, values=PRIORITY_LEVELS, state='readonly')
+        self.priority_box.pack(fill='x')
+
+        ttk.Label(right_meta, text="進度：").pack(anchor='w', pady=(0, 5))
+        self.status_box = ttk.Combobox(right_meta, values=STATUS_OPTIONS, state='readonly')
+        self.status_box.pack(fill='x')
+
+        ttk.Label(right_meta, text="開始日期：").pack(anchor='w', pady=(10, 5))
+        self.start_date_label = ttk.Label(right_meta, text="")
+        self.start_date_label.pack(fill='x')
+
+        ttk.Label(main_frame, text="完成紀錄／心得（選填）：").pack(anchor='w', pady=(0, 5))
+        self.history_text = tk.Text(main_frame, height=4, wrap='word', font=('Microsoft YaHei UI', 11))
+        self.history_text.pack(fill='both', pady=(0, 12))
+
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.pack(fill='x', pady=(10, 0))
+
+        ttk.Button(btn_frame, text="取消", command=self.destroy).pack(side='right', padx=(5, 0))
+        ttk.Button(btn_frame, text="保存", command=self.save).pack(side='right')
+
+        if todo:
+            self.title_entry.insert(0, todo.get('title', ''))
+            self.content_text.insert('1.0', todo.get('content', ''))
+            self.category_box.set(todo.get('category', '其他'))
+            self.priority_box.set(todo.get('priority', '中'))
+            self.status_box.set(todo.get('status', '未開始'))
+            self.start_date_label.config(text=todo.get('start_date', datetime.now().date().isoformat()))
+            history_records = todo.get('completion_history', [])
+            if history_records:
+                history_lines = [f"[{r.get('time')}] {r.get('notes')}" for r in history_records]
+                self.history_text.insert('1.0', '\n'.join(history_lines))
+        else:
+            self.category_box.set(CATEGORIES[0])
+            self.priority_box.set(PRIORITY_LEVELS[1])
+            self.status_box.set(STATUS_OPTIONS[0])
+            self.start_date_label.config(text=datetime.now().date().isoformat())
+
+        self.center_window()
+
+    def save(self):
+        title = self.title_entry.get().strip() or '無標題'
+        content = self.content_text.get('1.0', 'end-1c').strip()
+        start_date = self.start_date_label.cget('text') or datetime.now().date().isoformat()
+        category = self.category_box.get() or '其他'
+        priority = self.priority_box.get() or '中'
+        status = self.status_box.get() or '未開始'
+        history_notes = self.history_text.get('1.0', 'end-1c').strip()
+
+        todo_data = {
+            'title': title,
+            'content': content,
+            'start_date': start_date,
+            'category': category,
+            'priority': priority,
+            'status': status,
+            'notification': self.todo.get('notification') if self.todo else None,
+            'completion_history': list(self.todo.get('completion_history', [])) if self.todo else []
+        }
+
+        if history_notes:
+            todo_data['completion_history'].append({
+                'time': datetime.now().isoformat(),
+                'notes': history_notes
+            })
+
+        if self.todo:
+            self.callback(self.todo['id'], todo_data)
+        else:
+            self.callback(todo_data)
+        self.destroy()
+
+    def center_window(self):
+        self.update_idletasks()
+        width = self.winfo_width()
+        height = self.winfo_height()
+        x = (self.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.winfo_screenheight() // 2) - (height // 2)
+        self.geometry(f'{width}x{height}+{x}+{y}')
+
+class ExportWindow(tk.Toplevel):
+    def __init__(self, parent, app):
+        super().__init__(parent)
+        self.title('匯出設定')
+        self.geometry('760x760')
+        self.minsize(760, 700)
+        self.resizable(True, True)
+        self.transient(parent)
+        self.grab_set()
+
+        self.app = app
+        self.task_vars = []
+        self.field_vars = {}
+        self.selected_format = tk.StringVar(value='markdown')
+        self.category_filter = tk.StringVar(value='所有')
+        self.status_filter = tk.StringVar(value='所有')
+        self.priority_filter = tk.StringVar(value='所有')
+
+        self.selected_format.trace_add('write', lambda *args: self.update_export_path_extension())
+
+        container = ttk.Frame(self)
+        container.pack(fill='both', expand=True)
+
+        self.canvas = tk.Canvas(container, highlightthickness=0)
+        self.canvas.pack(side='left', fill='both', expand=True)
+
+        scrollbar = ttk.Scrollbar(container, orient='vertical', command=self.canvas.yview)
+        scrollbar.pack(side='right', fill='y')
+        self.canvas.configure(yscrollcommand=scrollbar.set)
+
+        main_frame = ttk.Frame(self.canvas, padding='12')
+        self.canvas_frame = self.canvas.create_window((0, 0), window=main_frame, anchor='nw')
+
+        main_frame.bind('<Configure>', lambda e: self.canvas.configure(scrollregion=self.canvas.bbox('all')))
+        self.canvas.bind('<Configure>', lambda e: self.canvas.itemconfigure(self.canvas_frame, width=e.width))
+
+        ttk.Label(main_frame, text='匯出說明', font=('Microsoft YaHei UI', 12, 'bold')).pack(anchor='w', pady=(0, 6))
+        ttk.Label(main_frame, text='預設勾選所有任務與欄位，您可從下方手動調整篩選條件、選擇要匯出的任務與內容欄位。', wraplength=680, justify='left').pack(anchor='w', pady=(0, 14))
+
+        top_frame = ttk.Frame(main_frame)
+        top_frame.pack(fill='x', pady=(0, 10))
+
+        task_frame = ttk.Labelframe(top_frame, text='選擇任務', padding='10')
+        task_frame.pack(side='left', fill='both', expand=True, padx=(0, 6))
+
+        self.select_all_var = tk.IntVar(value=1)
+        ttk.Checkbutton(task_frame, text='全部選取', variable=self.select_all_var, command=self.toggle_select_all).pack(anchor='w')
+
+        canvas = tk.Canvas(task_frame, borderwidth=0, height=260)
+        self.task_scroll = ttk.Scrollbar(task_frame, orient='vertical', command=canvas.yview)
+        self.task_panel = ttk.Frame(canvas)
+        canvas.configure(yscrollcommand=self.task_scroll.set)
+        self.task_scroll.pack(side='right', fill='y')
+        canvas.pack(side='left', fill='both', expand=True)
+        canvas.create_window((0, 0), window=self.task_panel, anchor='nw')
+        self.task_panel.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
+        self.build_task_list()
+
+        filter_frame = ttk.Labelframe(top_frame, text='篩選範圍', padding='10')
+        filter_frame.pack(side='left', fill='both', expand=True, padx=(6, 0))
+
+        ttk.Label(filter_frame, text='分類').pack(anchor='w', pady=(0, 4))
+        ttk.Combobox(filter_frame, values=['所有'] + CATEGORIES, state='readonly', textvariable=self.category_filter).pack(fill='x')
+
+        ttk.Label(filter_frame, text='狀態').pack(anchor='w', pady=(8, 4))
+        ttk.Combobox(filter_frame, values=['所有'] + STATUS_OPTIONS, state='readonly', textvariable=self.status_filter).pack(fill='x')
+
+        ttk.Label(filter_frame, text='優先級').pack(anchor='w', pady=(8, 4))
+        ttk.Combobox(filter_frame, values=['所有'] + PRIORITY_LEVELS, state='readonly', textvariable=self.priority_filter).pack(fill='x')
+
+        field_frame = ttk.Labelframe(main_frame, text='選擇內容', padding='10')
+        field_frame.pack(fill='x', pady=(0, 10))
+        for key, label in [
+            ('title', '標題'),
+            ('content', '內容'),
+            ('category', '分類'),
+            ('priority', '優先級'),
+            ('status', '進度'),
+            ('start_date', '開始日期'),
+            ('completion_history', '完成紀錄')
+        ]:
+            var = tk.IntVar(value=1)
+            self.field_vars[key] = var
+            ttk.Checkbutton(field_frame, text=label, variable=var, command=self.update_preview).pack(side='left', padx=6, pady=4)
+
+        format_frame = ttk.Labelframe(main_frame, text='匯出格式', padding='10')
+        format_frame.pack(fill='x', pady=(0, 10))
+        ttk.Radiobutton(format_frame, text='Markdown', variable=self.selected_format, value='markdown', command=self.update_preview).pack(side='left', padx=12)
+        ttk.Radiobutton(format_frame, text='JSON', variable=self.selected_format, value='json', command=self.update_preview).pack(side='left', padx=12)
+
+        path_frame = ttk.Labelframe(main_frame, text='匯出路徑', padding='10')
+        path_frame.pack(fill='x', pady=(0, 10))
+        self.export_path_var = tk.StringVar(value='')
+        ttk.Entry(path_frame, textvariable=self.export_path_var, state='readonly').pack(side='left', fill='x', expand=True, padx=(0, 6))
+        ttk.Button(path_frame, text='選擇路徑', command=self.choose_export_path).pack(side='right')
+
+        preview_frame = ttk.Labelframe(main_frame, text='匯出預覽', padding='10')
+        preview_frame.pack(fill='both', expand=True, pady=(0, 10))
+        self.preview_text = tk.Text(preview_frame, wrap='word', state='disabled', font=('Microsoft YaHei UI', 10))
+        self.preview_text.pack(fill='both', expand=True)
+
+        action_frame = ttk.Frame(main_frame)
+        action_frame.pack(fill='x')
+        ttk.Button(action_frame, text='更新預覽', command=self.update_preview).pack(side='left')
+        ttk.Button(action_frame, text='執行匯出', command=self.on_export).pack(side='right')
+        ttk.Button(action_frame, text='取消', command=self.destroy).pack(side='right', padx=(0, 5))
+
+        self.update_preview()
+
+    def choose_export_path(self):
+        default_ext = '.md' if self.selected_format.get() == 'markdown' else '.json'
+        filetypes = [('Markdown 檔案', '*.md')] if self.selected_format.get() == 'markdown' else [('JSON 檔案', '*.json')]
+        path = filedialog.asksaveasfilename(
+            defaultextension=default_ext,
+            filetypes=filetypes,
+            title='選擇匯出檔案'
+        )
+        if path:
+            self.export_path_var.set(self.adjust_path_extension(path))
+
+    def adjust_path_extension(self, path):
+        if not path:
+            return ''
+        ext = '.md' if self.selected_format.get() == 'markdown' else '.json'
+        base, current_ext = os.path.splitext(path)
+        if current_ext.lower() != ext:
+            return base + ext
+        return path
+
+    def update_export_path_extension(self):
+        current_path = self.export_path_var.get().strip()
+        if current_path:
+            self.export_path_var.set(self.adjust_path_extension(current_path))
+
+    def build_task_list(self):
+        for widget in self.task_panel.winfo_children():
+            widget.destroy()
+        self.task_vars.clear()
+        for todo in self.app.todos:
+            var = tk.IntVar(value=1)
+            self.task_vars.append((todo, var))
+            cb = ttk.Checkbutton(self.task_panel, text=f"{todo.get('title', '無標題')} ({todo.get('category','其他')}/{todo.get('status','未開始')})", variable=var, command=self.update_preview)
+            cb.pack(anchor='w', pady=2, fill='x')
+
+    def toggle_select_all(self):
+        value = self.select_all_var.get()
+        for _, var in self.task_vars:
+            var.set(value)
+        self.update_preview()
+
+    def filtered_tasks(self):
+        selected = []
+        for todo, var in self.task_vars:
+            if not var.get():
+                continue
+            if self.category_filter.get() != '所有' and todo.get('category') != self.category_filter.get():
+                continue
+            if self.status_filter.get() != '所有' and todo.get('status') != self.status_filter.get():
+                continue
+            if self.priority_filter.get() != '所有' and todo.get('priority') != self.priority_filter.get():
+                continue
+            selected.append(todo)
+        return selected
+
+    def selected_fields(self):
+        return [k for k, v in self.field_vars.items() if v.get()]
+
+    def generate_preview_text(self):
+        todos = self.filtered_tasks()
+        fields = self.selected_fields()
+        if self.selected_format.get() == 'json':
+            filtered = [{k: todo.get(k) for k in fields} for todo in todos]
+            return json.dumps(filtered, ensure_ascii=False, indent=2)
+        lines = ['# 預覽 - 匯出內容', '']
+        for todo in todos:
+            lines.append(f"## {todo.get('title', '無標題')}")
+            if 'category' in fields:
+                lines.append(f"- 類別：{todo.get('category', '其他')}")
+            if 'priority' in fields:
+                lines.append(f"- 優先級：{todo.get('priority', '中')}")
+            if 'status' in fields:
+                lines.append(f"- 進度：{todo.get('status', '未開始')}")
+            if 'start_date' in fields:
+                lines.append(f"- 開始日期：{todo.get('start_date') or '未設定'}")
+            if 'content' in fields:
+                lines.append(f"- 內容：{todo.get('content', '')}")
+            if 'completion_history' in fields and todo.get('completion_history'):
+                lines.append('- 完成紀錄：')
+                for record in todo['completion_history']:
+                    lines.append(f"  - {record.get('time')}：{record.get('notes')}")
+            lines.append('')
+        return '\n'.join(lines)
+
+    def update_preview(self):
+        text = self.generate_preview_text()
+        self.preview_text.config(state='normal')
+        self.preview_text.delete('1.0', 'end')
+        self.preview_text.insert('1.0', text)
+        self.preview_text.config(state='disabled')
+
+    def on_export(self):
+        todos = self.filtered_tasks()
+        fields = self.selected_fields()
+        if not todos:
+            messagebox.showwarning('警告', '請先選擇要匯出的任務。')
+            return
+        if not fields:
+            messagebox.showwarning('警告', '請至少選擇一個欄位。')
+            return
+        path = self.export_path_var.get().strip()
+        if not path:
+            self.choose_export_path()
+            path = self.export_path_var.get().strip()
+        if not path:
+            return
+        if self.selected_format.get() == 'json':
+            self.app.export_to_json(todos, fields, path=path)
+        else:
+            self.app.export_to_markdown(todos, fields, path=path)
+        self.destroy()
+
 class ConfigWindow(tk.Toplevel):
     def __init__(self, parent, callback=None):
         super().__init__(parent)
         self.title("Discord 設定")
         self.callback = callback
-        
+
         # 設定視窗大小和位置
         self.geometry("400x250")  # 增加高度以容納說明文字
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
-        
+
         # 創建主框架
         main_frame = ttk.Frame(self, padding="20")
         main_frame.pack(fill='both', expand=True)
-        
+
         # 添加說明文字
         ttk.Label(
             main_frame,
@@ -459,31 +746,31 @@ class ConfigWindow(tk.Toplevel):
             justify='left',
             wraplength=350
         ).pack(anchor='w', pady=(0, 10))
-        
+
         # Discord Webhook URL 輸入
         ttk.Label(main_frame, text="Discord Webhook URL：").pack(anchor='w', pady=(0, 5))
         self.webhook_entry = ttk.Entry(main_frame, width=50)
         self.webhook_entry.pack(fill='x', pady=(0, 15))
         self.webhook_entry.insert(0, DISCORD_WEBHOOK_URL)
-        
+
         # 按鈕區域
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill='x', pady=(15, 0))
-        
+
         ttk.Button(
             button_frame,
             text="取消",
             command=self.destroy
         ).pack(side='right', padx=(5, 0))
-        
+
         ttk.Button(
             button_frame,
             text="保存",
             command=self.save_settings
         ).pack(side='right')
-        
+
         self.center_window()
-    
+
     def save_settings(self):
         global DISCORD_WEBHOOK_URL
         webhook_url = self.webhook_entry.get().strip()
@@ -518,6 +805,12 @@ class SearchApp:
         self.root.geometry("500x700")
         self.root.resizable(True, True)
         
+        # 設定應用程式圖示
+        try:
+            self.root.iconbitmap('icon.ico')
+        except:
+            print("無法載入圖示檔案，使用預設圖示")
+        
         # 設定顏色主題
         self.colors = {
             'background_start': GradientFrame.COLOR_SCHEMES["theme1"]["start"],
@@ -536,8 +829,8 @@ class SearchApp:
         
         # 創建標題
         self.title_text = self.background.create_text(
-            250,
-            70,
+            0,  # 將在 on_resize 中更新
+            0,  # 將在 on_resize 中更新
             text="✨ 待辦事項",
             font=('Microsoft YaHei UI', 24, 'bold'),
             fill=self.colors['text'],
@@ -559,9 +852,17 @@ class SearchApp:
         self.add_btn = ttk.Button(
             self.input_frame,
             text='➕',
-            command=self.add_todo
+            command=self.open_task_editor
         )
         self.add_btn.pack(side='right', padx=5)
+
+        # 創建匯出按鈕
+        self.export_btn = ttk.Button(
+            self.input_frame,
+            text='匯出',
+            command=self.open_export_window
+        )
+        self.export_btn.pack(side='right', padx=5)
         
         # 載入待辦事項
         self.load_todos()
@@ -585,6 +886,33 @@ class SearchApp:
         settings_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="設定", menu=settings_menu)
         settings_menu.add_command(label="Discord 設定", command=self.show_config)
+        
+        # 綁定視窗大小改變事件
+        self.root.bind('<Configure>', self.on_resize)
+        
+        # 初始化響應式佈局
+        self.root.after(100, self.on_resize)
+    
+    def on_resize(self, event=None):
+        """響應式佈局更新"""
+        if event and event.widget != self.root:
+            return
+            
+        # 獲取視窗大小
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        
+        # 更新標題位置（水平居中，距離頂部 15%）
+        title_x = width // 2
+        title_y = int(height * 0.15)
+        self.background.coords(self.title_text, title_x, title_y)
+        
+        # 更新輸入框位置（距離頂部 25%）
+        input_y = int(height * 0.25)
+        self.input_frame.place(relx=0.1, rely=input_y/height, relwidth=0.8)
+        
+        # 重新渲染待辦事項以適應新的大小
+        self.render_todos()
     
     def load_todos(self):
         """載入待辦事項"""
@@ -724,15 +1052,109 @@ class SearchApp:
             
             NotificationWindow(self.root, todo_id, current_notification, self)
     
+    def open_task_editor(self):
+        TaskEditorWindow(self.root, self, callback=self.create_todo)
+
+    def create_todo(self, todo_data):
+        todo_data['id'] = str(uuid.uuid4())
+        todo_data['text'] = todo_data.get('title', '無標題')
+        todo_data['completed'] = todo_data.get('status') == '已完成'
+        if todo_data['completed'] and not todo_data.get('completion_time'):
+            todo_data['completion_time'] = datetime.now().isoformat()
+        if 'completion_history' not in todo_data:
+            todo_data['completion_history'] = []
+        self.todos.append(todo_data)
+        self.save_todos()
+        self.render_todos()
+
+    def open_edit_task(self, todo_id):
+        todo = next((t for t in self.todos if t['id'] == todo_id), None)
+        if todo:
+            TaskEditorWindow(self.root, self, todo=todo, callback=self.update_todo)
+
+    def update_todo(self, todo_id, todo_data):
+        for todo in self.todos:
+            if todo['id'] == todo_id:
+                todo.update(todo_data)
+                todo['text'] = todo_data.get('title', todo.get('text', '無標題'))
+                todo['completed'] = todo_data.get('status') == '已完成'
+                if todo['completed'] and not todo.get('completion_time'):
+                    todo['completion_time'] = datetime.now().isoformat()
+                if not todo['completed']:
+                    todo.pop('completion_time', None)
+                break
+        self.save_todos()
+        self.render_todos()
+
+    def open_export_window(self):
+        ExportWindow(self.root, self)
+
+    def export_to_json(self, todos, fields, path=None):
+        if not path:
+            path = filedialog.asksaveasfilename(
+                defaultextension='.json',
+                filetypes=[('JSON 檔案', '*.json')],
+                title='匯出為 JSON'
+            )
+        if path:
+            try:
+                filtered = [ {k: todo.get(k) for k in fields} for todo in todos ]
+                with open(path, 'w', encoding='utf-8') as f:
+                    json.dump(filtered, f, ensure_ascii=False, indent=2)
+                messagebox.showinfo('完成', f'已匯出 JSON 到：{path}')
+            except Exception as e:
+                messagebox.showerror('錯誤', f'匯出 JSON 失敗：{e}')
+
+    def export_to_markdown(self, todos, fields, path=None):
+        if not path:
+            path = filedialog.asksaveasfilename(
+                defaultextension='.md',
+                filetypes=[('Markdown 檔案', '*.md')],
+                title='匯出為 Markdown'
+            )
+        if path:
+            try:
+                lines = ['# 待辦事項清單', '']
+                for todo in todos:
+                    lines.append(f"## {todo.get('title', '無標題')}")
+                    if 'category' in fields:
+                        lines.append(f"- 類別：{todo.get('category', '其他')}")
+                    if 'priority' in fields:
+                        lines.append(f"- 優先級：{todo.get('priority', '中')}")
+                    if 'status' in fields:
+                        lines.append(f"- 進度：{todo.get('status', '未開始')}")
+                    if 'start_date' in fields:
+                        lines.append(f"- 開始日期：{todo.get('start_date') or '未設定'}")
+                    if 'content' in fields:
+                        lines.append(f"- 說明：{todo.get('content', '')}")
+                    if 'completion_history' in fields and todo.get('completion_history'):
+                        lines.append('- 完成紀錄：')
+                        for record in todo['completion_history']:
+                            lines.append(f"  - {record.get('time')}：{record.get('notes')}")
+                    lines.append('')
+                with open(path, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(lines))
+                messagebox.showinfo('完成', f'已匯出 Markdown 到：{path}')
+            except Exception as e:
+                messagebox.showerror('錯誤', f'匯出 Markdown 失敗：{e}')
+    
     def render_todos(self):
         # 清除現有的待辦事項
         for item in self.todo_items:
             item.destroy()
         self.todo_items.clear()
         
+        # 獲取視窗大小
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        
+        # 計算待辦事項的起始位置（距離頂部 35%）
+        start_y = int(height * 0.35)
+        item_height = max(40, int(height * 0.06))  # 動態調整項目高度
+        
         # 重新渲染所有待辦事項
         for i, todo in enumerate(self.todos):
-            y = 250 + i * 40  # 從y=250開始，每個項目間隔40像素
+            y = start_y + i * item_height
             todo_item = TodoItem(
                 self.background,  # 直接在背景上繪製
                 y,
@@ -740,7 +1162,7 @@ class SearchApp:
                 self.delete_todo,
                 self.toggle_todo,
                 self.show_notification_settings,
-                self.edit_todo  # 添加編輯回調
+                self.open_edit_task
             )
             self.todo_items.append(todo_item)
     
@@ -750,9 +1172,15 @@ class SearchApp:
         if text:
             new_todo = {
                 'id': str(uuid.uuid4()),
-                'text': text,
+                'title': text,
+                'content': '',
+                'start_date': datetime.now().date().isoformat(),
+                'category': CATEGORIES[0],
+                'priority': PRIORITY_LEVELS[1],
+                'status': '未開始',
                 'completed': False,
-                'notification': None
+                'notification': None,
+                'completion_history': []
             }
             self.todos.append(new_todo)
             self.save_todos()
@@ -770,16 +1198,6 @@ class SearchApp:
         for todo in self.todos:
             if todo['id'] == todo_id:
                 todo['completed'] = not todo['completed']
-                break
-        self.save_todos()
-        self.render_todos()
-    
-    def edit_todo(self, todo_id, new_text):
-        """編輯待辦事項"""
-        print(f"正在編輯待辦事項 {todo_id}: {new_text}")  # 添加調試信息
-        for todo in self.todos:
-            if todo['id'] == todo_id:
-                todo['text'] = new_text
                 break
         self.save_todos()
         self.render_todos()
